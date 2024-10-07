@@ -1,6 +1,6 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{BankMsg, Binary, Deps, DepsMut, Env, Event, MessageInfo, Reply, Response, StdResult, SubMsg};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
@@ -11,51 +11,113 @@ use crate::state::{State, STATE};
 const CONTRACT_NAME: &str = env!("CARGO_PKG_NAME");
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const REPLY_ID_EXECUTE: u64 = 1;
+
+type ContractResult<T> = Result<T, ContractError>;
+
+struct ExecuteContext<'a> {
+  deps: DepsMut<'a>,
+  #[allow(dead_code)]
+  env: Env,
+  info: MessageInfo,
+}
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
   deps: DepsMut,
   _env: Env,
-  _info: MessageInfo,
+  info: MessageInfo,
   _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
   set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-  unimplemented!();
+  let state = State {
+    owner: info.sender.clone(),
+    message: None,
+  };
+  STATE.save(deps.storage, &state)?;
 
-  Ok(Response::new()
-    .add_attribute("method", "instantiate")
-  )
+  Ok(Response::new())
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
-  _deps: DepsMut,
-  _env: Env,
-  _info: MessageInfo,
-  _msg: ExecuteMsg,
+  deps: DepsMut,
+  env: Env,
+  info: MessageInfo,
+  msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-  unimplemented!()
+  let ctx = ExecuteContext { deps, env, info };
+  match msg {
+    ExecuteMsg::Execute { message } =>
+      exec_execute(ctx, message),
+    ExecuteMsg::EmergencyReset {} =>
+      exec_emergency_reset(ctx),
+  }
+}
+
+fn exec_execute(ctx: ExecuteContext, message: String) -> ContractResult<Response> {
+  let mut state = STATE.load(ctx.deps.storage)?;
+  if state.message.is_some() {
+    return Err(ContractError::generic("message already set"));
+  }
+
+  if ctx.info.funds.len() != 1 {
+    return Err(ContractError::generic("expected 1 coin"));
+  }
+
+  state.message = Some(message);
+  STATE.save(ctx.deps.storage, &state)?;
+
+  let submsg = SubMsg::reply_always(
+    BankMsg::Send {
+      to_address: ctx.info.sender.to_string(),
+      amount: vec![ctx.info.funds[0].clone()],
+    },
+    REPLY_ID_EXECUTE
+  );
+
+  Ok(Response::new()
+    .add_attribute("action", "execute")
+    .add_submessage(submsg)
+  )
+}
+
+fn exec_emergency_reset(ctx: ExecuteContext) -> ContractResult<Response> {
+  let mut state = STATE.load(ctx.deps.storage)?;
+  if ctx.info.sender != state.owner {
+    return Err(ContractError::Unauthorized {});
+  }
+
+  state.message = None;
+  STATE.save(ctx.deps.storage, &state)?;
+
+  Ok(Response::new().add_attribute("action", "emergency_reset"))
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+  match msg {
+    Reply { id: REPLY_ID_EXECUTE, result } => {
+      let mut state = STATE.load(deps.storage)?;
+      let message = state.message.ok_or(ContractError::generic("message not set"))?;
+
+      state.message = None;
+      STATE.save(deps.storage, &state)?;
+
+      let mut e = Event::new("dropnote");
+      if result.is_ok() {
+        e = e.add_attribute("message", message);
+      }
+
+      Ok(Response::new().add_event(e))
+    }
+    Reply { id: _, .. } => {
+      Err(ContractError::generic("unknown reply id"))
+    }
+  }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
   unimplemented!()
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-  use cosmwasm_std::{coins, from_json};
-
-  #[test]
-  fn dummy_test() {
-    let mut deps = mock_dependencies();
-
-    let msg = InstantiateMsg {};
-    let info = mock_info("creator", &coins(1000, "earth"));
-
-    // we can just call .unwrap() to assert this was a success
-    let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-    assert_eq!(0, res.messages.len());
-  }
 }
