@@ -7,6 +7,8 @@ pub struct InstantiateMsg {}
 pub enum ExecuteMsg {
   Execute {
     message: String,
+    recipient: String,
+    encrypted: bool,
   },
   Announce {
     message: String,

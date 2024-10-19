@@ -5,3 +5,5 @@ neutrontestnet:
     codeId: 7552
   - address: neutron1pnsjxx0mud0rh4jyfcq793x7e7rr0sedph47gzsh9qdzffugejas8cc3cd
     codeId: 7584
+  - address: neutron1tzsg4ukd7qxxrqj4qjtu7q6yd4rnnp3fyfa79765jvn4kskctvksury338
+    codeId: 7585

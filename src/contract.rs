@@ -46,17 +46,19 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
   let ctx = ExecuteContext { deps, env, info };
   match msg {
-    ExecuteMsg::Execute { message } => exec_execute(ctx, message),
+    ExecuteMsg::Execute { message, recipient, encrypted } => exec_execute(ctx, message, recipient, encrypted),
     ExecuteMsg::Announce { message } => exec_announce(ctx, message),
     ExecuteMsg::SetEncryptionKey { key } => exec_set_encryption_key(ctx, key),
   }
 }
 
-fn exec_execute(ctx: ExecuteContext, message: String) -> ContractResult<Response> {
+fn exec_execute(ctx: ExecuteContext, message: String, recipient: String, encrypted: bool) -> ContractResult<Response> {
   // events created within a smart contract are prefixed with "wasm-" by the chain
   let event = Event::new("dropnote")
     .add_attribute("type", "message")
     .add_attribute("message", message)
+    .add_attribute("recipient", recipient)
+    .add_attribute("encrypted", encrypted.to_string())
     .add_attribute("sender", ctx.info.sender.to_string());
 
   Ok(Response::new()
