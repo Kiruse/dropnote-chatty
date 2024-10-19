@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
   pub owner: Addr,
-  pub message: Option<String>,
+  pub encryption_key: Option<String>,
 }
 
 pub const STATE: Item<State> = Item::new("state");

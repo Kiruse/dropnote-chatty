@@ -1,0 +1,7 @@
+neutrontestnet:
+  - address: neutron1r5yqtjjag896y9g5r5g3tt264vq8ddy0jjurhdycgyukjhjvxe0sm9ne7v
+    codeId: 7391
+  - address: neutron1n4yuc384v967mleg8uev4wv5kpv9eungr3hr029hr22z09gzqa3q53dc87
+    codeId: 7552
+  - address: neutron1pnsjxx0mud0rh4jyfcq793x7e7rr0sedph47gzsh9qdzffugejas8cc3cd
+    codeId: 7584

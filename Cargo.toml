@@ -1,5 +1,5 @@
 [package]
-name = "dropnote-test"
+name = "dropnote-chatty"
 version = "0.1.0"
 authors = ["kiruse"]
 edition = "2021"

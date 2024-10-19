@@ -1,23 +1,21 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{BankMsg, Binary, Deps, DepsMut, Env, Event, MessageInfo, Reply, Response, StdResult, SubMsg};
+use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg};
 use crate::state::{State, STATE};
 
 // version info for migration info
 const CONTRACT_NAME: &str = env!("CARGO_PKG_NAME");
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const REPLY_ID_EXECUTE: u64 = 1;
-
 type ContractResult<T> = Result<T, ContractError>;
 
+#[allow(dead_code)]
 struct ExecuteContext<'a> {
   deps: DepsMut<'a>,
-  #[allow(dead_code)]
   env: Env,
   info: MessageInfo,
 }
@@ -32,7 +30,7 @@ pub fn instantiate(
   set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
   let state = State {
     owner: info.sender.clone(),
-    message: None,
+    encryption_key: None,
   };
   STATE.save(deps.storage, &state)?;
 
@@ -48,76 +46,68 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
   let ctx = ExecuteContext { deps, env, info };
   match msg {
-    ExecuteMsg::Execute { message } =>
-      exec_execute(ctx, message),
-    ExecuteMsg::EmergencyReset {} =>
-      exec_emergency_reset(ctx),
+    ExecuteMsg::Execute { message } => exec_execute(ctx, message),
+    ExecuteMsg::Announce { message } => exec_announce(ctx, message),
+    ExecuteMsg::SetEncryptionKey { key } => exec_set_encryption_key(ctx, key),
   }
 }
 
 fn exec_execute(ctx: ExecuteContext, message: String) -> ContractResult<Response> {
-  let mut state = STATE.load(ctx.deps.storage)?;
-  if state.message.is_some() {
-    return Err(ContractError::generic("message already set"));
-  }
-
-  if ctx.info.funds.len() != 1 {
-    return Err(ContractError::generic("expected 1 coin"));
-  }
-
-  state.message = Some(message);
-  STATE.save(ctx.deps.storage, &state)?;
-
-  let submsg = SubMsg::reply_always(
-    BankMsg::Send {
-      to_address: ctx.info.sender.to_string(),
-      amount: vec![ctx.info.funds[0].clone()],
-    },
-    REPLY_ID_EXECUTE
-  );
+  // events created within a smart contract are prefixed with "wasm-" by the chain
+  let event = Event::new("dropnote")
+    .add_attribute("type", "message")
+    .add_attribute("message", message)
+    .add_attribute("sender", ctx.info.sender.to_string());
 
   Ok(Response::new()
     .add_attribute("action", "execute")
-    .add_submessage(submsg)
+    .add_event(event)
   )
 }
 
-fn exec_emergency_reset(ctx: ExecuteContext) -> ContractResult<Response> {
-  let mut state = STATE.load(ctx.deps.storage)?;
-  if ctx.info.sender != state.owner {
-    return Err(ContractError::Unauthorized {});
-  }
+fn exec_announce(ctx: ExecuteContext, message: String) -> ContractResult<Response> {
+  let event = Event::new("dropnote")
+    .add_attribute("type", "announce")
+    .add_attribute("message", message)
+    .add_attribute("sender", ctx.info.sender.to_string());
 
-  state.message = None;
+  Ok(Response::new()
+    .add_attribute("action", "announce")
+    .add_event(event)
+  )
+}
+
+fn exec_set_encryption_key(ctx: ExecuteContext, key: Option<String>) -> ContractResult<Response> {
+  assert_owner(&ctx)?;
+
+  let mut state = STATE.load(ctx.deps.storage)?;
+  state.encryption_key = key.clone();
   STATE.save(ctx.deps.storage, &state)?;
 
-  Ok(Response::new().add_attribute("action", "emergency_reset"))
+  let event = Event::new("dropnote")
+    .add_attribute("type", "pubkey")
+    .add_attribute("key", key.unwrap_or_default());
+
+  Ok(Response::new()
+    .add_attribute("action", "set_encryption_key")
+    .add_event(event)
+  )
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
-  match msg {
-    Reply { id: REPLY_ID_EXECUTE, result } => {
-      let mut state = STATE.load(deps.storage)?;
-      let message = state.message.ok_or(ContractError::generic("message not set"))?;
-
-      state.message = None;
-      STATE.save(deps.storage, &state)?;
-
-      let mut e = Event::new("dropnote");
-      if result.is_ok() {
-        e = e.add_attribute("message", message);
-      }
-
-      Ok(Response::new().add_event(e))
-    }
-    Reply { id: _, .. } => {
-      Err(ContractError::generic("unknown reply id"))
-    }
+fn assert_owner(ctx: &ExecuteContext) -> ContractResult<()> {
+  if ctx.info.sender != STATE.load(ctx.deps.storage)?.owner {
+    Err(ContractError::Unauthorized {})
+  } else {
+    Ok(())
   }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-  unimplemented!()
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+  match msg {
+    QueryMsg::Owner {} => {
+      let state = STATE.load(deps.storage)?;
+      to_json_binary(&OwnerResponse { owner: state.owner.to_string() })
+    }
+  }
 }

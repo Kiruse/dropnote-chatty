@@ -1,0 +1,5 @@
+neutrontestnet:
+  endpoints:
+    rest: 'https://rest-falcron.pion-1.ntrn.tech'
+    rpc: 'https://rpc-falcron.pion-1.ntrn.tech'
+    ws: 'wss://rpc-falcron.pion-1.ntrn.tech/websocket'

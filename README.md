@@ -1,12 +1,10 @@
-# dropnote-test
-`dropnote-test` was generated with `cw-pipeline`.
+# Dropnote Chatty
+Dropnote Chatty is a reference implementation of a Rust CosmWasm smart contract which integrates with the Dropnote protocol.
 
-Following is a list of relevant and helpful CLI tools you may use:
+In brief, by emitting events of the correct format, your smart contract can participate in the Dropnote protocol, designating messages for specific users or broadcasting announcements to all subscribers.
 
-- `cargo test` - run unit tests of your project.
-- `./build.sh` - build & optimize your project for the blockchain. The contract .wasm will be in `artifacts/`.
-- `cargo schema` - generate JSON schemas of your project.
-- `cw-pipeline store` - upload & store the project's .wasm contract file (aka *code*).
-- `cw-pipeline instantiate` - instantiate an uploaded contract *code*. Not bound to this project.
-- `cw-pipeline exec` - execute a transaction on a contract instance. Not bound to this project.
-- `cw-pipeline query` - run a *smart query* on a contract instance. Not bound to this project.
+*Note:* This currently still requires some additional features to be implemented in the [Dropnote Indexer library & reference implementation](https://github.com/kiruse/dropnote-indexer).
+
+By itself, Chatty v1 simply allows users to broadcast messages with the `sender` field set to their own address, acting as a proxy.
+
+Chatty v1.1 adds support for storing messages within the contract itself, enabling persistent on-chain storage of messages. However, this requires additional features to be implemented in the Dropnote Indexer. Specifically, the Indexer currently only checks two locations for Dropnote events: The transaction memo, and the transaction event logs. The plan is to, eventually, introduce the concept of "storage references", which would instruct indexers to look up the actual contents of a message elsewhere, e.g. on IPFS, on Arweave, or by a smart query on a smart contract.
